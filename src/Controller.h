@@ -79,7 +79,7 @@ public:
 
     const int RND_TIME=1000; // only used in AHB type scheduler
     const int HISTORY_TIME=400; // only used in AHB type scheduler
-    const bool SMART_PDN=true; // whether to insert PDN smartly for ranks which aren't in use or not
+    const bool SMART_PDN=false; // whether to insert PDN smartly for ranks which aren't in use or not
     
     // const int choice1_wt=10;// weights for the three choices in AHB; should total 100
     //const int choice2_wt=45;
@@ -406,11 +406,17 @@ public:
 
                     bool possible = true;
                     head = queue3->q.begin();
-                    for (auto itr = head; itr != queue3->q.end(); itr++)
-                        if (itr->addr_vec[int(T::Level::Rank)] == r->id && itr->type == Request::Type::FACTPOWERDOWN)
+                    for (auto itr = head; itr != queue3->q.end(); itr++) {
+                        if (itr->addr_vec[int(T::Level::Rank)] == r->id
+                            && (itr->type == Request::Type::FACTPOWERDOWN
+                                || itr->type == Request::Type::SACTPOWERDOWN
+                                || itr->type == Request::Type::FPREPOWERDOWN
+                                || itr->type == Request::Type::SPREPOWERDOWN)) {
                             possible = false;
+                        }
+                    }
 
-                    if (possible && !channel->spec->powerdown_pending[rank_no_violate]) {
+                    if (possible /*&& !channel->spec->powerdown_pending[rank_no_violate]*/) {
                         vector<int> addr_vec(int(T::Level::MAX), -1);
                         addr_vec[0] = 0;
                         addr_vec[1] = rank_no_violate;
@@ -424,15 +430,21 @@ public:
             }
 
             if(rank_violate!=-1 && otherq.size()<32) {
-                if (r->state == T::State::FActPowerDown) {
+                if (r->state == T::State::FActPowerDown
+                    || r->state == T::State::FPrePowerDown
+                    || r->state == T::State::SActPowerDown
+                    || r->state == T::State::SPrePowerDown) {
 
                     bool possible = true;
                     head = queue3->q.begin();
-                    for (auto itr = head; itr != queue3->q.end(); itr++)
-                        if (itr->addr_vec[int(T::Level::Rank)] == r->id && itr->type == Request::Type::ACTPOWERUP)
+                    for (auto itr = head; itr != queue3->q.end(); itr++) {
+                        if (itr->addr_vec[int(T::Level::Rank)] == r->id
+                            && (itr->type == Request::Type::ACTPOWERUP || itr->type == Request::Type::PREPOWERUP)) {
                             possible = false;
+                        }
+                    }
 
-                    if (possible && !channel->spec->powerup_pending[rank_violate]) {
+                    if (possible /*&& !channel->spec->powerup_pending[rank_violate]*/) {
                         vector<int> addr_vec(int(T::Level::MAX), -1);
                         addr_vec[0] = 0;
                         addr_vec[1] = rank_violate;
@@ -466,7 +478,7 @@ public:
         } // SUMIT Select appropriate arbiter(FSM) and reset these counters every HISTORY_TIME ticks
 
         if(clk%RND_TIME==0) {
-            rndnum=rand()%2;
+            rndnum=rand()%3;
             if        ( rndnum == 0) {choice=1;choice1count++;}
             else if ( rndnum == 1) {choice=2;choice2count++;}
             else                             {choice=3;choice3count++;}
@@ -516,8 +528,7 @@ public:
         Queue* queue = &actq;
         Queue* queue1= &readq;
         Queue* queue2= &writeq;
-        Queue* queue3= &otherq;
-	
+
         auto req = scheduler->get_head(queue->q,queue->q);
 	
         if (req == queue->q.end() || !is_ready(req)) {
@@ -580,15 +591,15 @@ public:
 
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
-        if(channel->spec->is_poweringdown(cmd)) {
+       /* if(channel->spec->is_poweringdown(cmd)) {
             channel->spec->update_powerdown_pending(get_addr_vec(cmd,req));
         }
         if(channel->spec->is_poweringup(cmd)) {
             channel->spec->update_powerup_pending(get_addr_vec(cmd,req));
-        }
+        }*/
         issue_cmd(cmd, get_addr_vec(cmd, req));
-	    if(int(cmd)==13)
-	        cout<<"\nvalue of clk :"<<clk<<"\n";
+	    /*if(int(cmd)==13)
+	        cout<<"\nvalue of clk :"<<clk<<"\n";*/
         updatebankhistory(get_addr_vec(cmd,req));
         updatehistory(cmd);
 

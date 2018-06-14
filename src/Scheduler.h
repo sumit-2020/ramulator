@@ -28,7 +28,7 @@ namespace ramulator
 
       enum class Type {
 	FCFS, FRFCFS, FRFCFS_Cap, FRFCFS_PriorHit, AHB, MAX
-	  }type = Type::AHB;
+	  }type = Type::FRFCFS_PriorHit;
          //type = Type::FRFCFS_Cap;
          //type = Type::FCFS;
 

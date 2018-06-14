@@ -56,8 +56,8 @@ DDR3::DDR3(Org org, Speed speed) :
     init_rowopen();
     init_lambda();
     init_timing();
-  
-    powerdown_pending = new bool[4];
+
+    /*powerdown_pending = new bool[4];
     powerup_pending = new bool[4];
     for(int y=0;y<4;y++)powerup_pending[y]=false;
     for(int y=0;y<4;y++)powerdown_pending[y]=false;
@@ -67,21 +67,21 @@ DDR3::DDR3(Org org, Speed speed) :
     cout<<"\n powerdown_pending size ="<<org_entry.count[int(Level::Rank)];
     cout<<"\n Powerdown_pending initial contents : ";
     for(int y=0;y<4;y++)cout<<powerdown_pending[y]<<" ";cout<<"\n";
-    cout << powerdown_pending << " " << powerup_pending << std::endl;
+    cout << powerdown_pending << " " << powerup_pending << std::endl;*/
 }
 
 DDR3::DDR3(const string &org_str, const string &speed_str) :
         DDR3(org_map[org_str], speed_map[speed_str]) {
-  powerdown_pending = new bool[4];
-  powerup_pending = new bool[4];
-  for(int y=0;y<4;y++)powerup_pending[y]=false;
-  for(int y=0;y<4;y++)powerdown_pending[y]=false;
-  cout<<"\n powerup_pending size ="<<org_entry.count[int(Level::Rank)];
-  cout<<"\n Powerup_pending initial contents : ";
-  for(int y=0;y<4;y++)cout<<powerup_pending[y]<<" ";cout<<"\n";
-  cout<<"\n powerdown_pending size ="<<org_entry.count[int(Level::Rank)];
-  cout<<"\n Powerdown_pending initial contents : ";
-  for(int y=0;y<4;y++)cout<<powerdown_pending[y]<<" ";cout<<"\n";
+    /*powerdown_pending = new bool[4];
+    powerup_pending = new bool[4];
+    for(int y=0;y<4;y++)powerup_pending[y]=false;
+    for(int y=0;y<4;y++)powerdown_pending[y]=false;
+    cout<<"\n powerup_pending size ="<<org_entry.count[int(Level::Rank)];
+    cout<<"\n Powerup_pending initial contents : ";
+    for(int y=0;y<4;y++)cout<<powerup_pending[y]<<" ";cout<<"\n";
+    cout<<"\n powerdown_pending size ="<<org_entry.count[int(Level::Rank)];
+    cout<<"\n Powerdown_pending initial contents : ";
+    for(int y=0;y<4;y++)cout<<powerdown_pending[y]<<" ";cout<<"\n";*/
 }
 
 void DDR3::set_channel_number(int channel) {
@@ -184,7 +184,7 @@ void DDR3::init_prereq() {
             case int(State::FActPowerDown):
             case int(State::SPrePowerDown):
             case int(State::FPrePowerDown):
-                assert(false && "Cannot read while powered down");
+                return Command::RD;
             case int(State::SelfRefresh):
                 return Command::SRX;
             default:
@@ -420,8 +420,10 @@ void DDR3::init_lambda() {
             switch (int(node->state)) {
                 case int(State::FActPowerDown):
                     node->state = State::FPrePowerDown;
+                    break;
                 case int(State::SActPowerDown):
                     node->state = State::SPrePowerDown;
+                    break;
             }
         }
     };
@@ -441,31 +443,31 @@ void DDR3::init_lambda() {
             assert(bank->state == State::Closed && "Close all open banks before entering precharge powerdown.");
         }
         node->state = State::FPrePowerDown;
-        node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
+        //node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
     };
     lambda[int(Level::Rank)][int(Command::PDN_S_PRE)] = [](DRAM<DDR3> *node, int id) {
         for (auto bank : node->children) {
             assert(bank->state == State::Closed && "Close all open banks entering calling precharge powerdown.");
         }
         node->state = State::SPrePowerDown;
-        node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
+        //node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
     };
     lambda[int(Level::Rank)][int(Command::PDN_F_ACT)] = [](DRAM<DDR3> *node, int id) {
         node->state = State::FActPowerDown;
-        node->parent->spec->powerdown_pending[node->id]=false; // resets pending_powerdown when powerdown actually finishes
+        //node->parent->spec->powerdown_pending[node->id]=false; // resets pending_powerdown when powerdown actually finishes
     };
     lambda[int(Level::Rank)][int(Command::PDN_S_ACT)] = [](DRAM<DDR3> *node, int id) {
         node->state = State::SActPowerDown;
-        node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
+        //node->parent->spec->powerdown_pending[id]=false; // resets pending_powerdown when powerdown actually finishes
     };
     lambda[int(Level::Rank)][int(Command::PUP_ACT)] = [](DRAM<DDR3> *node, int id) {
         node->state = State::PowerUp;
-        node->parent->spec->powerup_pending[node->id]=false; // resets pending_powerup when powerup actually finishes
+        //node->parent->spec->powerup_pending[node->id]=false; // resets pending_powerup when powerup actually finishes
     };
     lambda[int(Level::Rank)][int(Command::PUP_PRE)] = [](DRAM<DDR3> *node, int id) {
         node->state = State::PowerUp;
-        node->parent->spec->powerup_pending[id]=false; // resets pending_powerup when powerup actually finishes
-	
+        //node->parent->spec->powerup_pending[id]=false; // resets pending_powerup when powerup actually finishes
+
     };
     lambda[int(Level::Rank)][int(Command::SRE)] = [](DRAM<DDR3> *node, int id) {
         node->state = State::SelfRefresh;

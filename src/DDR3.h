@@ -18,8 +18,8 @@ namespace ramulator {
         enum class Org;
         enum class Speed;
 
-	bool *powerdown_pending ; // array to track which ranks are powering down at present
-	bool *powerup_pending ; // array to track which ranks are powering up at present
+	/*bool *powerdown_pending ; // array to track which ranks are powering down at present
+	bool *powerup_pending ; // array to track which ranks are powering up at present*/
 
         DDR3(Org org, Speed speed);
 
@@ -281,7 +281,7 @@ namespace ramulator {
 
         int read_latency;
 	
-	void update_powerdown_pending(const vector<int>& addr_vec){
+	/*void update_powerdown_pending(const vector<int>& addr_vec){
         powerdown_pending[addr_vec[int(DDR3::Level::Rank)]]=true;
         cout<<"\n UPDATE_POWERDOWN_PENDING was called !\n";
         cout<<"\n powerdown_pending size ="<<org_entry.count[int(Level::Rank)];
@@ -295,7 +295,7 @@ namespace ramulator {
         cout<<"\n powerup_pending size ="<<org_entry.count[int(Level::Rank)];
 	    cout<<"\n Powerup_pending contents : ";
 	    for(int y=0;y<org_entry.count[int(Level::Rank)];y++)cout<<powerup_pending[y]<<" ";cout<<"\n";
-	}
+	}*/
 
     private:
         void init_speed();

@@ -21,8 +21,8 @@ public:
     enum class Speed;
     enum class Temp;
 
-    bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
-	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+    /*bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present*/
 
     ALDRAM(Org org, Speed speed);
     ALDRAM(const string& org_str, const string& speed_str);
@@ -255,13 +255,13 @@ public:
     int read_latency;
     void aldram_timing(Temp current_temperature);
 
-    void update_powerdown_pending(const vector<int>& addr_vec){
+    /*void update_powerdown_pending(const vector<int>& addr_vec){
       assert(false && "Unimplemented function for this DRAM type");
     }
     
     void update_powerup_pending(const vector<int>& addr_vec){
       assert(false && "Unimplemented function for this DRAM type");
-    }
+    }*/
     
 private:
     void init_speed();

@@ -22,8 +22,8 @@ public:
     enum class Org;
     enum class Speed;
 
-	bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
-	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+	/*bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present*/
     
     TLDRAM(Org org, Speed speed, int segment_ratio);
     TLDRAM(const string& org_str, const string& speed_str, int segment_ratio);

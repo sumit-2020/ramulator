@@ -52,8 +52,8 @@ public:
     enum class Org;
     enum class Speed;
 
-	bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
-	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+	/*bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present*/
     
     enum class Type;
     DSARP(Org org, Speed speed, Type type, int n_sa);
@@ -274,13 +274,13 @@ public:
     // Increase RRD b/w REF and ACT when they go to the same bank (SARP)
     double nRRD_factor = 1.138;
 
-    void update_powerdown_pending(const vector<int>& addr_vec){
+    /*void update_powerdown_pending(const vector<int>& addr_vec){
       assert(false && "Unimplemented function for this DRAM type");
     }
     
     void update_powerup_pending(const vector<int>& addr_vec){
       assert(false && "Unimplemented function for this DRAM type");
-    }
+    }*/
 
 private:
     void init_speed();
