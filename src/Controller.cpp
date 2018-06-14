@@ -92,7 +92,7 @@ void Controller<TLDRAM>::tick(){
     if (otherq.size())
         queue = &otherq;  // "other" requests are rare, so we give them precedence over reads/writes
 
-    auto req = scheduler->get_head(queue->q);
+    auto req = scheduler->get_head(queue->q,queue->q);
     if (req == queue->q.end() || !is_ready(req)) {
         // we couldn't find a command to schedule -- let's try to be speculative
         auto cmd = TLDRAM::Command::PRE;

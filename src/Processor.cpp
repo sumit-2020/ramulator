@@ -177,7 +177,7 @@ Core::Core(const Config& configs, int coreid,
     req_addr = memory.page_allocator(req_addr, id);
   }
 
-  
+
   // regStats
   record_cycs.name("record_cycs_core_" + to_string(id))
              .desc("Record cycle number for calculating weighted speedup. (Only valid when expected limit instruction number is non zero in config file.)")
@@ -463,11 +463,25 @@ bool Trace::get_dramtrace_request(long& req_addr, Request::Type& req_type)
     req_addr = std::stoul(line, &pos, 16);
 
     pos = line.find_first_not_of(' ', pos+1);
-
+    
     if (pos == string::npos || line.substr(pos)[0] == 'R')
         req_type = Request::Type::READ;
     else if (line.substr(pos)[0] == 'W')
         req_type = Request::Type::WRITE;
-    else assert(false);
+    else if (line.substr(pos) == "PD_F_PRE")
+        req_type = Request::Type::FPREPOWERDOWN;
+    else if (line.substr(pos) == "PD_S_PRE")
+        req_type = Request::Type::SPREPOWERDOWN;
+    else if (line.substr(pos) == "PD_F_ACT")
+        req_type = Request::Type::FACTPOWERDOWN;
+    else if (line.substr(pos) == "PD_S_ACT")
+        req_type = Request::Type::SACTPOWERDOWN;
+    else if (line.substr(pos) == "PU_PRE")
+        req_type = Request::Type::PREPOWERUP;
+    else if (line.substr(pos) == "PU_ACT")
+        req_type = Request::Type::ACTPOWERUP;
+    else if (line.substr(pos) == "NOP")
+        req_type = Request::Type::NOP; // A NOP will stall the controller for the number of cycles specified in the addr
+    else assert(false && "Unimplemented command type");
     return true;
 }

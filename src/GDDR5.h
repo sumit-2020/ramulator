@@ -17,6 +17,10 @@ public:
     static string standard_name;
     enum class Org;
     enum class Speed;
+
+	bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+    
     GDDR5(Org org, Speed speed);
     GDDR5(const string& org_str, const string& speed_str);
     
@@ -96,14 +100,32 @@ public:
         }
     }
 
+    bool is_poweringdown(Command cmd)
+    {
+        switch(int(cmd)) {
+            case int(Command::PDE):
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool is_poweringup(Command cmd)
+    {
+        assert(false);
+    }
 
     /* State */
     enum class State : int
     {
-        Opened, Closed, PowerUp, ActPowerDown, PrePowerDown, SelfRefresh, MAX
+      Opened, Closed, PowerUp, FActPowerDown, SActPowerDown, FPrePowerDown, SPrePowerDown, ActPowerDown, PrePowerDown, SelfRefresh, MAX
     } start[int(Level::MAX)] = {
         State::MAX, State::PowerUp, State::MAX, State::Closed, State::Closed, State::MAX
     };
+
+    inline bool is_cmdlegal(Command cmd, Level level, State state) {
+        return true; // Assumes all commands are legal : Suyash
+    }
 
     /* Translate */
     Command translate[int(Request::Type::MAX)] = {
@@ -196,6 +218,15 @@ public:
     }, speed_entry;
 
     int read_latency;
+    
+    void update_powerdown_pending(const vector<int>& addr_vec){
+      assert(false && "Unimplemented function for this DRAM type");
+    }
+    
+    void update_powerup_pending(const vector<int>& addr_vec){
+      assert(false && "Unimplemented function for this DRAM type");
+    }
+
 
 private:
     void init_speed();

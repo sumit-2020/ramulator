@@ -21,6 +21,10 @@ public:
     static string standard_name;
     enum class Org;
     enum class Speed;
+
+	bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+    
     TLDRAM(Org org, Speed speed, int segment_ratio);
     TLDRAM(const string& org_str, const string& speed_str, int segment_ratio);
 
@@ -41,6 +45,7 @@ public:
         ACTF, PREF, PREAF,
         MIG,
         ACTM, PREM, PREAM,
+	RDA, WRA, // SUMIT Dummy commands to avoid errors in AHB
         MAX
     };
 
@@ -111,6 +116,19 @@ public:
         }
     }
 
+    bool is_poweringdown(Command cmd)
+    {
+        switch(int(cmd)) {
+            case int(Command::PDE):
+                return true;
+            default:
+                return false;
+        }
+    }
+    bool is_poweringup(Command cmd)
+    {
+        assert(false);
+    }
 
     /* State */
     enum class State : int
@@ -119,6 +137,10 @@ public:
     } start[int(Level::MAX)] = {
         State::MAX, State::PowerUp, State::Closed, State::Closed, State::MAX
     };
+
+    inline bool is_cmdlegal(Command cmd, Level level, State state) {
+        return true; // Assumes all commands are legal : Suyash
+    }
 
     /* Translate */
     Command translate[int(Request::Type::MAX)] = {
@@ -244,6 +266,11 @@ public:
     }, speed_entry;
 
     int read_latency;
+
+    // typedef list<Request>::iterator ReqIter;
+    //ReqIter AHBarbiter(ReqIter req1, ReqIter req2)
+    //ReqIter ramulator::Scheduler<ramulator::TLDRAM>::AHBarbiter(ReqIter req1, ReqIter req2){return req1;};
+      //function<void(DRAM<TLDRAM>*, int)> lambda[int(Level::MAX)][int(Command::MAX)];
 
 private:
     void init_speed();

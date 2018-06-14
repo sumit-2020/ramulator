@@ -8,6 +8,7 @@
 #include <list>
 #include <string>
 #include <vector>
+#include <ctime>
 
 #include "Config.h"
 #include "DRAM.h"
@@ -15,6 +16,7 @@
 #include "Request.h"
 #include "Scheduler.h"
 #include "Statistics.h"
+
 
 #include "ALDRAM.h"
 #include "SALP.h"
@@ -75,6 +77,31 @@ public:
     RowTable<T>* rowtable;  // tracks metadata about rows (e.g., which are open and for how long)
     Refresh<T>* refresh;
 
+    const int RND_TIME=1000; // only used in AHB type scheduler
+    const int HISTORY_TIME=400; // only used in AHB type scheduler
+    const bool SMART_PDN=true; // whether to insert PDN smartly for ranks which aren't in use or not
+    
+    // const int choice1_wt=10;// weights for the three choices in AHB; should total 100
+    //const int choice2_wt=45;
+    //const int choice3_wt=45;
+    
+    int choice1count=0;
+    int choice2count=0;
+    int choice3count=0;    
+    int arbiter1count=0;
+    int arbiter2count=0;
+    int arbiter3count=0; 
+    
+    array<typename T::Command, 2> history; // SUMIT Array to store the last 2 issued requests
+    array<int, 2> bankhistory; // Array to store the most recently accessed two banks
+    int readCountLast10000=1;  // SUMIT Counters to count # of reads & writes in last 10000 issued commands
+    int writeCountLast10000=1;
+    int arbiter=2; // 1/2/3 Based on rdwrratio >1.2/>0.8/<0.8 respectively
+    float rdwrratio=1; //updated continuously; checked every HISTORY_TIME ticks to update arbiter
+    int rndnum=1; //a randum number which is generated every RND_TIME
+    int choice=1; //updated every RND_TIME ticks; only used in AHB type scheduler; 1/2/3 for latency(performance)/AHB(to match rdwrratio)/power_aware
+
+    
     struct Queue {
         list<Request> q;
         unsigned int max = 32;
@@ -89,6 +116,7 @@ public:
                    // for avoiding useless activations (i.e., PRECHARGE
                    // after ACTIVATE w/o READ of WRITE command)
     Queue otherq;  // queue for all "other" requests (e.g., refresh)
+    
 
     deque<Request> pending;  // read requests that are about to receive data from DRAM
     bool write_mode = false;  // whether write requests should be prioritized over reads
@@ -292,6 +320,14 @@ public:
     }
 
     void finish(long read_req, long dram_cycles) {
+      cout<<"choice1count = "<<choice1count<<"\n";
+      cout<<"choice2count = "<<choice2count<<"\n";
+      cout<<"choice3count = "<<choice3count<<"\n";
+      cout<<"arbiter1count = "<<arbiter1count<<"\n";
+      cout<<"arbiter2count = "<<arbiter2count<<"\n";
+      cout<<"arbiter3count = "<<arbiter3count<<"\n";
+      
+      
       read_latency_avg = read_latency_sum.value() / read_req;
       req_queue_length_avg = req_queue_length_sum.value() / dram_cycles;
       read_req_queue_length_avg = read_req_queue_length_sum.value() / dram_cycles;
@@ -328,10 +364,115 @@ public:
         }
         return true;
     }
+    void smart_Pdn_Pup_insert(){
+        Queue *queue=&actq;
+        Queue *queue1=&readq;
+        Queue *queue2=&writeq;
+        Queue *queue3=&otherq;
+        int rank_no_violate=-1; //rank which has no command in all 3 queues, can be powered down
+        int rank_violate=-1;      //rank which is powered down and has awaiting commands in any queue, needs to be powered up
+
+        // for(int r=0; r<channel->spec->org_entry.count[int(Level::Rank)]; r++){
+        for (auto r : channel->children){
+
+            auto head=queue->q.begin();
+            for(auto itr = head; itr!=queue->q.end(); itr++)
+                if(itr->addr_vec[int(T::Level::Rank)]==r->id) {
+                    rank_violate=r->id;
+                    goto cnt;
+                }
+
+            head=queue1->q.begin();
+            for(auto itr = head; itr!=queue1->q.end(); itr++)
+                if(itr->addr_vec[int(T::Level::Rank)]==r->id) {
+                rank_violate=r->id;
+                goto cnt;
+                }
+
+            head=queue2->q.begin();
+            for(auto itr = head; itr!=queue2->q.end(); itr++)
+                if(itr->addr_vec[int(T::Level::Rank)]==r->id) {
+                    rank_violate=r->id;
+                    goto cnt;
+                }
+
+
+            rank_no_violate=r->id;
+
+            cnt:
+
+            if(rank_no_violate!=-1 && otherq.size()<32 ) {
+                if (r->state == T::State::PowerUp) {
+
+                    bool possible = true;
+                    head = queue3->q.begin();
+                    for (auto itr = head; itr != queue3->q.end(); itr++)
+                        if (itr->addr_vec[int(T::Level::Rank)] == r->id && itr->type == Request::Type::FACTPOWERDOWN)
+                            possible = false;
+
+                    if (possible && !channel->spec->powerdown_pending[rank_no_violate]) {
+                        vector<int> addr_vec(int(T::Level::MAX), -1);
+                        addr_vec[0] = 0;
+                        addr_vec[1] = rank_no_violate;
+                        addr_vec[2] = 0;
+                        addr_vec[3] = 0;
+                        Request req(addr_vec, Request::Type::FACTPOWERDOWN, NULL);
+                        bool res = enqueue(req);
+                        assert(res);
+                    }
+                }
+            }
+
+            if(rank_violate!=-1 && otherq.size()<32) {
+                if (r->state == T::State::FActPowerDown) {
+
+                    bool possible = true;
+                    head = queue3->q.begin();
+                    for (auto itr = head; itr != queue3->q.end(); itr++)
+                        if (itr->addr_vec[int(T::Level::Rank)] == r->id && itr->type == Request::Type::ACTPOWERUP)
+                            possible = false;
+
+                    if (possible && !channel->spec->powerup_pending[rank_violate]) {
+                        vector<int> addr_vec(int(T::Level::MAX), -1);
+                        addr_vec[0] = 0;
+                        addr_vec[1] = rank_violate;
+                        addr_vec[2] = 0;
+                        addr_vec[3] = 0;
+                        Request req(addr_vec, Request::Type::ACTPOWERUP, NULL);
+                        bool res = enqueue(req);
+                        assert(res);
+                    }
+                }
+            } // Rank voilate check
+            rank_no_violate=-1; //reset these values so that they aren't used in next iteration
+            rank_violate=-1;    //reset these values so that they aren't used in next iteration
+
+        }
+    }
 
     void tick()
     {
         clk++;
+        if(SMART_PDN && otherq.size()<32){//check whether some rank can be powered down or some sleeping rank needs to be powered up
+            smart_Pdn_Pup_insert();
+        }
+        if(clk%HISTORY_TIME==0) {
+            rdwrratio=readCountLast10000/writeCountLast10000;
+            if       (rdwrratio>1.2) {arbiter=1;arbiter1count++;}
+            else if(rdwrratio>0.8) {arbiter=2;arbiter2count++;}
+            else                           {arbiter=3;arbiter3count++;}
+            readCountLast10000=1;
+            writeCountLast10000=1;
+        } // SUMIT Select appropriate arbiter(FSM) and reset these counters every HISTORY_TIME ticks
+
+        if(clk%RND_TIME==0) {
+            rndnum=rand()%2;
+            if        ( rndnum == 0) {choice=1;choice1count++;}
+            else if ( rndnum == 1) {choice=2;choice2count++;}
+            else                             {choice=3;choice3count++;}
+            //cout<<choice<<"\n";
+        }
+	
         req_queue_length_sum += readq.size() + writeq.size() + pending.size();
         read_req_queue_length_sum += readq.size() + pending.size();
         write_req_queue_length_sum += writeq.size();
@@ -341,9 +482,9 @@ public:
             Request& req = pending[0];
             if (req.depart <= clk) {
                 if (req.depart - req.arrive > 1) { // this request really accessed a row
-                  read_latency_sum += req.depart - req.arrive;
-                  channel->update_serving_requests(
-                      req.addr_vec.data(), -1, clk);
+                    read_latency_sum += req.depart - req.arrive;
+                    channel->update_serving_requests(
+                            req.addr_vec.data(), -1, clk);
                 }
                 req.callback(req);
                 pending.pop_front();
@@ -357,9 +498,9 @@ public:
         if (!write_mode) {
             // yes -- write queue is almost full or read queue is empty
             if (writeq.size() > int(wr_high_watermark * writeq.max) 
-                    /*|| readq.size() == 0*/) // Hasan: Switching to write mode when there are just a few 
-                                              // write requests, even if the read queue is empty, incurs a lot of overhead. 
-                                              // Commented out the read request queue empty condition
+                /*|| readq.size() == 0*/) // Hasan: Switching to write mode when there are just a few
+                // write requests, even if the read queue is empty, incurs a lot of overhead.
+                // Commented out the read request queue empty condition
                 write_mode = true;
         }
         else {
@@ -373,23 +514,32 @@ public:
         // First check the actq (which has higher priority) to see if there
         // are requests available to service in this cycle
         Queue* queue = &actq;
-
-        auto req = scheduler->get_head(queue->q);
+        Queue* queue1= &readq;
+        Queue* queue2= &writeq;
+        Queue* queue3= &otherq;
+	
+        auto req = scheduler->get_head(queue->q,queue->q);
+	
         if (req == queue->q.end() || !is_ready(req)) {
             queue = !write_mode ? &readq : &writeq;
 
             if (otherq.size())
                 queue = &otherq;  // "other" requests are rare, so we give them precedence over reads/writes
 
-            req = scheduler->get_head(queue->q);
+            if( queue != &otherq && this->scheduler->type == Scheduler<T>::Type::AHB )
+                req = scheduler->get_head(queue1->q,queue2->q);
+            else
+                req = scheduler->get_head(queue->q,queue->q);
+       
         }
 
-        if (req == queue->q.end() || !is_ready(req)) {
+        if (req == queue->q.end() ||  ((this->scheduler->type == Scheduler<T>::Type::AHB)&&(req==queue1->q.end()||req==queue2->q.end())) || !is_ready(req)) {
             // we couldn't find a command to schedule -- let's try to be speculative
             auto cmd = T::Command::PRE;
             vector<int> victim = rowpolicy->get_victim(cmd);
             if (!victim.empty()){
                 issue_cmd(cmd, victim);
+                //updatehistory(cmd); updating PRE commands to history isn't useful in rdwrratio
             }
             return;  // nothing more to be done this cycle
         }
@@ -398,7 +548,7 @@ public:
             req->is_first_command = false;
             int coreid = req->coreid;
             if (req->type == Request::Type::READ || req->type == Request::Type::WRITE) {
-              channel->update_serving_requests(req->addr_vec.data(), 1, clk);
+                channel->update_serving_requests(req->addr_vec.data(), 1, clk);
             }
             int tx = (channel->spec->prefetch_size * channel->spec->channel_width / 8);
             if (req->type == Request::Type::READ) {
@@ -412,35 +562,50 @@ public:
                     ++read_row_misses[coreid];
                     ++row_misses;
                 }
-              read_transaction_bytes += tx;
+                read_transaction_bytes += tx;
             } else if (req->type == Request::Type::WRITE) {
-              if (is_row_hit(req)) {
-                  ++write_row_hits[coreid];
-                  ++row_hits;
-              } else if (is_row_open(req)) {
-                  ++write_row_conflicts[coreid];
-                  ++row_conflicts;
-              } else {
-                  ++write_row_misses[coreid];
-                  ++row_misses;
-              }
-              write_transaction_bytes += tx;
+                if (is_row_hit(req)) {
+                    ++write_row_hits[coreid];
+                    ++row_hits;
+                } else if (is_row_open(req)) {
+                    ++write_row_conflicts[coreid];
+                    ++row_conflicts;
+                } else {
+                    ++write_row_misses[coreid];
+                    ++row_misses;
+                }
+                write_transaction_bytes += tx;
             }
         }
 
         // issue command on behalf of request
         auto cmd = get_first_cmd(req);
+        if(channel->spec->is_poweringdown(cmd)) {
+            channel->spec->update_powerdown_pending(get_addr_vec(cmd,req));
+        }
+        if(channel->spec->is_poweringup(cmd)) {
+            channel->spec->update_powerup_pending(get_addr_vec(cmd,req));
+        }
         issue_cmd(cmd, get_addr_vec(cmd, req));
+	    if(int(cmd)==13)
+	        cout<<"\nvalue of clk :"<<clk<<"\n";
+        updatebankhistory(get_addr_vec(cmd,req));
+        updatehistory(cmd);
 
         // check whether this is the last command (which finishes the request)
         //if (cmd != channel->spec->translate[int(req->type)]){
-        if (!(channel->spec->is_accessing(cmd) || channel->spec->is_refreshing(cmd))) {
-            if(channel->spec->is_opening(cmd)) {
+        if (!(channel->spec->is_accessing(cmd)
+              || channel->spec->is_refreshing(cmd)/*
+              || channel->spec->is_poweringdown(cmd)
+              || channel->spec->is_poweringup(cmd)*/)) {
+            if(channel->spec->is_opening(cmd) /*|| channel->spec->is_poweringdown(cmd)|| channel->spec->is_poweringup(cmd)*/) {
                 // promote the request that caused issuing activation to actq
                 actq.q.push_back(*req);
                 queue->q.erase(req);
             }
-
+            if (channel->spec->is_poweringdown(cmd) || channel->spec->is_poweringup(cmd)) {
+                queue->q.erase(req);
+            }
             return;
         }
 
@@ -456,6 +621,7 @@ public:
 
         // remove request from queue
         queue->q.erase(req);
+
     }
 
     bool is_ready(list<Request>::iterator req)
@@ -499,34 +665,51 @@ public:
 
     // For telling whether this channel is busying in processing read or write
     bool is_active() {
-      return (channel->cur_serving_requests > 0);
+        return (channel->cur_serving_requests > 0);
     }
 
     // For telling whether this channel is under refresh
     bool is_refresh() {
-      return clk <= channel->end_of_refreshing;
+        return clk <= channel->end_of_refreshing;
     }
 
     void set_high_writeq_watermark(const float watermark) {
-       wr_high_watermark = watermark; 
+        wr_high_watermark = watermark;
     }
 
     void set_low_writeq_watermark(const float watermark) {
-       wr_low_watermark = watermark;
+        wr_low_watermark = watermark;
     }
 
     void record_core(int coreid) {
 #ifndef INTEGRATED_WITH_GEM5
-      record_read_hits[coreid] = read_row_hits[coreid];
-      record_read_misses[coreid] = read_row_misses[coreid];
-      record_read_conflicts[coreid] = read_row_conflicts[coreid];
-      record_write_hits[coreid] = write_row_hits[coreid];
-      record_write_misses[coreid] = write_row_misses[coreid];
-      record_write_conflicts[coreid] = write_row_conflicts[coreid];
+        record_read_hits[coreid] = read_row_hits[coreid];
+        record_read_misses[coreid] = read_row_misses[coreid];
+        record_read_conflicts[coreid] = read_row_conflicts[coreid];
+        record_write_hits[coreid] = write_row_hits[coreid];
+        record_write_misses[coreid] = write_row_misses[coreid];
+        record_write_conflicts[coreid] = write_row_conflicts[coreid];
 #endif
     }
 
 private:
+
+    void updatebankhistory(const vector<int>& addr_vec)
+    {
+        bankhistory[0] = bankhistory[1];
+        bankhistory[1] = addr_vec[int(T::Level::Bank)];
+    }
+    
+    void updatehistory(typename T::Command cmd)
+    {
+        if(cmd == T::Command::RD || cmd == T::Command::RDA || cmd == T::Command::WR || cmd == T::Command::WRA){
+            if(cmd == T::Command::RD || cmd == T::Command::RDA)   readCountLast10000++;
+            if(cmd == T::Command::WR || cmd == T::Command::WRA) writeCountLast10000++;
+            history[0]=history[1];
+            history[1]=cmd;
+        }
+    }
+    
     typename T::Command get_first_cmd(list<Request>::iterator req)
     {
         typename T::Command cmd = channel->spec->translate[int(req->type)];
@@ -535,7 +718,7 @@ private:
 
     // upgrade to an autoprecharge command
     void cmd_issue_autoprecharge(typename T::Command& cmd,
-                                            const vector<int>& addr_vec) {
+                                 const vector<int>& addr_vec) {
 
         // currently, autoprecharge is only used with closed row policy
         if(channel->spec->is_accessing(cmd) && rowpolicy->type == RowPolicy<T>::Type::ClosedAP) {
@@ -545,7 +728,7 @@ private:
             auto begin = addr_vec.begin();
             vector<int> rowgroup(begin, begin + int(T::Level::Row) + 1);
 
-			int num_row_hits = 0;
+            int num_row_hits = 0;
 
             for (auto itr = queue->q.begin(); itr != queue->q.end(); ++itr) {
                 if (is_row_hit(itr)) { 
@@ -569,8 +752,8 @@ private:
             }
 
             assert(num_row_hits > 0); // The current request should be a hit, 
-                                      // so there should be at least one request 
-                                      // that hits in the current open row
+            // so there should be at least one request
+            // that hits in the current open row
             if(num_row_hits == 1) {
                 if(cmd == T::Command::RD)
                     cmd = T::Command::RDA;

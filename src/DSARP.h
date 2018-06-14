@@ -51,6 +51,10 @@ public:
     static string standard_name;
     enum class Org;
     enum class Speed;
+
+	bool *powerdown_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering down at present
+	bool *powerup_pending = new bool[org_entry.count[int(Level::Rank)]] {}; // array to track which ranks are powering up at present
+    
     enum class Type;
     DSARP(Org org, Speed speed, Type type, int n_sa);
     DSARP(const string& org_str, const string& speed_str, Type type, int n_sa);
@@ -142,13 +146,26 @@ public:
         }
     }
 
+    bool is_poweringup(Command cmd)
+    {
+        assert(false);
+    }
+
+    bool is_poweringdown(Command cmd)
+    {
+        assert(false);
+    }
     /* State */
     enum class State : int
     {
-        Opened, Closed, PowerUp, ActPowerDown, PrePowerDown, SelfRefresh, MAX
+      Opened, Closed, PowerUp, FActPowerDown, SActPowerDown, FPrePowerDown, SPrePowerDown, ActPowerDown, PrePowerDown, SelfRefresh, MAX
     } start[int(Level::MAX)] = {
         State::MAX, State::PowerUp, State::Closed, State::Closed, State::MAX
     };
+
+    inline bool is_cmdlegal(Command cmd, Level level, State state) {
+        return true; // Assumes all commands are legal : Suyash
+    }
 
     /* Translate */
     Command translate[int(Request::Type::MAX)] = {
@@ -256,6 +273,14 @@ public:
 
     // Increase RRD b/w REF and ACT when they go to the same bank (SARP)
     double nRRD_factor = 1.138;
+
+    void update_powerdown_pending(const vector<int>& addr_vec){
+      assert(false && "Unimplemented function for this DRAM type");
+    }
+    
+    void update_powerup_pending(const vector<int>& addr_vec){
+      assert(false && "Unimplemented function for this DRAM type");
+    }
 
 private:
     void init_speed();
